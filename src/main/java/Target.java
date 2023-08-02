@@ -20,6 +20,7 @@ import java.io.ObjectOutputStream;
 import java.math.RoundingMode;
 import java.net.Socket;
 import java.text.DecimalFormat;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @XmlRootElement
@@ -29,6 +30,7 @@ public class Target {
     private double y;
     private double xVelocity;
     private double yVelocity;
+    private AtomicBoolean isUsable;
 
 
     private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");
@@ -40,6 +42,7 @@ public class Target {
         this.xVelocity = xVelocity;
         this.yVelocity = yVelocity;
         decimalFormat.setRoundingMode(RoundingMode.UP);
+        isUsable=new AtomicBoolean(false);
 
     }
 
@@ -89,7 +92,7 @@ public class Target {
     }
 
 
-    public synchronized void sendTarget(String address, int portNumber) {
+    public  void sendTarget(String address, int portNumber) {
         /*
         boolean isConnected = false;
         Socket socket = null;
@@ -147,13 +150,20 @@ public class Target {
         }
         */
         while (true) {
-            System.out.println("Send Func" + "X:" + x + " Y:" + y);
+            if (isUsable.get()) {
+                System.out.println("Send Func " + "X:" + x + " Y:" + y);
+                try {
+                    Thread.sleep(700);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
 
         }
 
     }
 
-    public synchronized void updateCoordinates() {
+    public  void updateCoordinates() {
         while (true) {
             if (x > 500 | x < -500) {
                 xVelocity *= -1;
@@ -161,16 +171,14 @@ public class Target {
             if (y > 500 | y < -500) {
                 yVelocity *= -1;
             }
-
+            isUsable.set(false);
             this.x += xVelocity;
             this.y -= yVelocity;
             this.x = formatAndRoundNumber(x);
             this.y = formatAndRoundNumber(y);
-            System.out.println("Update Func" + "X:" + x + " Y:" + y);
-
-            notify();
+            System.out.println("Update Func " + "X:" + x + " Y:" + y);
+            isUsable.set(true);
             try {
-                wait();
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
