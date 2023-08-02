@@ -1,0 +1,8 @@
+<?xml version = "1.0"?>
+<Target>
+    <targetName>Target-1</targetName>
+    <x>-500</x>
+    <y>500</y>
+    <xVelocity>0.3</xVelocity>
+    <yVelocity>0.2</yVelocity>
+</Target>
