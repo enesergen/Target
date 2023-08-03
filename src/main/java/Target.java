@@ -1,6 +1,7 @@
 
 import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import org.apache.commons.lang3.SerializationUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -20,13 +21,14 @@ import java.util.concurrent.Semaphore;
 
 @XmlRootElement
 public class Target implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1234567L;
+
     private String targetName;
     private double x;
     private double y;
     private double xVelocity;
     private double yVelocity;
-    private Semaphore semaphore1;
-    private Semaphore semaphore2;
 
     private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");
 
@@ -37,8 +39,6 @@ public class Target implements Serializable {
         this.xVelocity = xVelocity;
         this.yVelocity = yVelocity;
         decimalFormat.setRoundingMode(RoundingMode.UP);
-        semaphore1 = new Semaphore(1);
-        semaphore2 = new Semaphore(0);
 
     }
 
@@ -90,51 +90,81 @@ public class Target implements Serializable {
 
     public void sendTarget(String address, int portNumber) {
         boolean isConnected = false;
-        Socket socket;
-        ObjectInputStream ois=null;
-        ObjectOutputStream oos=null;
+        Socket socket = null;
+        ObjectOutputStream oos = null;
+        ObjectInputStream ois = null;
 
-        while(!isConnected){
+        while (!isConnected) {
             try {
-                socket=new Socket(address,portNumber);
-                ObjectInputStream ois1=new ObjectInputStream(socket.getInputStream());
-                ObjectOutputStream oos1=new ObjectOutputStream(socket.getOutputStream());
-                isConnected=true;
-                System.out.println("Connection provided:"+socket.getInetAddress().getHostAddress());
+                socket = new Socket(address, portNumber);
+                oos = new ObjectOutputStream(socket.getOutputStream());
+                ois = new ObjectInputStream(socket.getInputStream());
+                isConnected = true;
+                System.out.println("Connection is provided for port:" + portNumber);
             } catch (IOException e) {
-                System.out.println("Try to connect sensor...");
+                System.out.println("Try to connect sensor");
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(1000);
                 } catch (InterruptedException ex) {
                     throw new RuntimeException(ex);
                 }
             }
-
+        }
+        //
+        while (true) {
+            try {
+                if (isConnected) {
+                    oos.writeObject(targetToString());
+                    oos.flush();
+                    String msg = (String) ois.readObject();
+                    System.out.println(msg);
+                } else {
+                    socket = new Socket(address, portNumber);
+                    oos = new ObjectOutputStream(socket.getOutputStream());
+                    ois = new ObjectInputStream(socket.getInputStream());
+                    isConnected = true;
+                    Thread.sleep(1000);
+                }
+            } catch (IOException e) {
+                isConnected = false;
+                System.out.println("Connection failed. It will try to provide connection");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
+                }
+            } catch (InterruptedException | ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
         }
 
     }
 
+    public String targetToString() {
+        return targetName + "," + x + "," + y + "," + xVelocity + "," + yVelocity;
+    }
 
     public void updateCoordinates() {
         while (true) {
-
-            if (x > 500 | x < -500) {
-                xVelocity *= -1;
+            synchronized (this) {
+                if (x > 500 | x < -500) {
+                    xVelocity *= -1;
+                }
+                if (y > 500 | y < -500) {
+                    yVelocity *= -1;
+                }
+                this.x += xVelocity;
+                this.y -= yVelocity;
+                this.x = formatAndRoundNumber(x);
+                this.y = formatAndRoundNumber(y);
+                System.out.println("Update Func " + "X:" + x + " Y:" + y);
             }
-            if (y > 500 | y < -500) {
-                yVelocity *= -1;
-            }
-            this.x += xVelocity;
-            this.y -= yVelocity;
-            this.x = formatAndRoundNumber(x);
-            this.y = formatAndRoundNumber(y);
-            System.out.println("Update Func " + "X:" + x + " Y:" + y);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            //semaphore1.release();
+
         }
     }
 
@@ -171,14 +201,13 @@ public class Target implements Serializable {
 
     public static void main(String[] args) {
         Target target = readObjectFromXML();
-        //Thread t1 = new Thread(target::updateCoordinates);
-        //Thread t2 = new Thread(() -> {
-          //  target.sendTarget("ad", 5);
-        //});
+        Thread t1 = new Thread(target::updateCoordinates);
+        Thread t2 = new Thread(() -> {
+            target.sendTarget("localhost", 8080);
+        });
         //t1.start();
-        //t2.start();
-        System.out.println(target.getTargetName());
-        target.sendTarget("localhost", 8080);
+        t2.start();
+
 
     }
 }
