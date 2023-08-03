@@ -1,6 +1,4 @@
-import jakarta.xml.bind.JAXBContext;
-import jakarta.xml.bind.JAXBException;
-import jakarta.xml.bind.Unmarshaller;
+
 import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import org.w3c.dom.Document;
@@ -13,25 +11,22 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.File;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.math.RoundingMode;
 import java.net.Socket;
 import java.text.DecimalFormat;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Semaphore;
+
 
 @XmlRootElement
-public class Target {
+public class Target implements Serializable {
     private String targetName;
     private double x;
     private double y;
     private double xVelocity;
     private double yVelocity;
-    private AtomicBoolean isUsable;
-
+    private Semaphore semaphore1;
+    private Semaphore semaphore2;
 
     private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");
 
@@ -42,7 +37,8 @@ public class Target {
         this.xVelocity = xVelocity;
         this.yVelocity = yVelocity;
         decimalFormat.setRoundingMode(RoundingMode.UP);
-        isUsable=new AtomicBoolean(false);
+        semaphore1 = new Semaphore(1);
+        semaphore2 = new Semaphore(0);
 
     }
 
@@ -92,22 +88,21 @@ public class Target {
     }
 
 
-    public  void sendTarget(String address, int portNumber) {
-        /*
+    public void sendTarget(String address, int portNumber) {
         boolean isConnected = false;
-        Socket socket = null;
-        ObjectOutputStream oos = null;
-        ObjectInputStream ois = null;
-        while (!isConnected) {
-            try {
-                socket = new Socket(address, portNumber);
-                ois = new ObjectInputStream(socket.getInputStream());
-                oos = new ObjectOutputStream(socket.getOutputStream());
-                isConnected = true;
-                System.out.println("Connection is provided for IP:" + address + " Port:" + portNumber);
+        Socket socket;
+        ObjectInputStream ois=null;
+        ObjectOutputStream oos=null;
 
+        while(!isConnected){
+            try {
+                socket=new Socket(address,portNumber);
+                ObjectInputStream ois1=new ObjectInputStream(socket.getInputStream());
+                ObjectOutputStream oos1=new ObjectOutputStream(socket.getOutputStream());
+                isConnected=true;
+                System.out.println("Connection provided:"+socket.getInetAddress().getHostAddress());
             } catch (IOException e) {
-                System.out.println("Try to connect sensor");
+                System.out.println("Try to connect sensor...");
                 try {
                     Thread.sleep(2000);
                 } catch (InterruptedException ex) {
@@ -115,74 +110,31 @@ public class Target {
                 }
             }
 
-            while (true) {
-                try {
-                    if (isConnected) {
-                        oos.writeObject(this);
-                        oos.flush();
-                        oos.reset();
-                        String sensorMessage = (String) ois.readObject();
-                        System.out.println(sensorMessage);
-                        Thread.sleep(1000);
-
-                    } else {
-                        socket = new Socket(address, portNumber);
-                        oos = new ObjectOutputStream(socket.getOutputStream());
-                        ois = new ObjectInputStream(socket.getInputStream());
-                        System.out.println("Connected again to server");
-                        isConnected = true;
-
-                    }
-                } catch (IOException | ClassNotFoundException e) {
-                    isConnected = false;
-                    System.out.println("connection is ruptured");
-                    try {
-                        Thread.sleep(2000);
-                    } catch (InterruptedException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-
-            }
-
-        }
-        */
-        while (true) {
-            if (isUsable.get()) {
-                System.out.println("Send Func " + "X:" + x + " Y:" + y);
-                try {
-                    Thread.sleep(700);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
         }
 
     }
 
-    public  void updateCoordinates() {
+
+    public void updateCoordinates() {
         while (true) {
+
             if (x > 500 | x < -500) {
                 xVelocity *= -1;
             }
             if (y > 500 | y < -500) {
                 yVelocity *= -1;
             }
-            isUsable.set(false);
             this.x += xVelocity;
             this.y -= yVelocity;
             this.x = formatAndRoundNumber(x);
             this.y = formatAndRoundNumber(y);
             System.out.println("Update Func " + "X:" + x + " Y:" + y);
-            isUsable.set(true);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
+            //semaphore1.release();
         }
     }
 
@@ -218,16 +170,15 @@ public class Target {
     }
 
     public static void main(String[] args) {
-
         Target target = readObjectFromXML();
-        Thread t1 = new Thread(() -> {
-            target.updateCoordinates();
-        });
-        Thread t2 = new Thread(() -> {
-            target.sendTarget("ad", 5);
-        });
-        t1.start();
-        t2.start();
+        //Thread t1 = new Thread(target::updateCoordinates);
+        //Thread t2 = new Thread(() -> {
+          //  target.sendTarget("ad", 5);
+        //});
+        //t1.start();
+        //t2.start();
+        System.out.println(target.getTargetName());
+        target.sendTarget("localhost", 8080);
 
     }
 }
