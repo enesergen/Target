@@ -201,7 +201,8 @@ public class Target {
     }
 
     public static void main(String[] args) {
-        
+
+        //Target target = readObjectFromXML(args[0]);
         Target target = readObjectFromXML("C:\\Users\\stj.eergen\\Desktop\\Target\\src\\main\\resources\\target1.xml");
         Thread t1 = new Thread(target::updateCoordinates);
         t1.start();
