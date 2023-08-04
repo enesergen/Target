@@ -1,7 +1,4 @@
 
-import jakarta.xml.bind.annotation.XmlAttribute;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import org.apache.commons.lang3.SerializationUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -16,21 +13,18 @@ import java.io.*;
 import java.math.RoundingMode;
 import java.net.Socket;
 import java.text.DecimalFormat;
-import java.util.concurrent.Semaphore;
+import java.util.ArrayList;
 
 
-@XmlRootElement
-public class Target implements Serializable {
-    @Serial
-    private static final long serialVersionUID = 1234567L;
-
+public class Target {
     private String targetName;
     private double x;
     private double y;
     private double xVelocity;
     private double yVelocity;
-
     private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");
+    private static ArrayList<Integer> portList;
+    private static String address;
 
     public Target(String targetName, double x, double y, double xVelocity, double yVelocity) {
         this.targetName = targetName;
@@ -39,10 +33,9 @@ public class Target implements Serializable {
         this.xVelocity = xVelocity;
         this.yVelocity = yVelocity;
         decimalFormat.setRoundingMode(RoundingMode.UP);
-
     }
 
-    @XmlAttribute
+
     public String getTargetName() {
         return targetName;
     }
@@ -51,7 +44,6 @@ public class Target implements Serializable {
         this.targetName = targetName;
     }
 
-    @XmlAttribute
     public double getX() {
         return x;
     }
@@ -60,7 +52,6 @@ public class Target implements Serializable {
         this.x = x;
     }
 
-    @XmlAttribute
     public double getY() {
         return y;
     }
@@ -69,7 +60,6 @@ public class Target implements Serializable {
         this.y = y;
     }
 
-    @XmlAttribute
     public double getxVelocity() {
         return xVelocity;
     }
@@ -78,7 +68,6 @@ public class Target implements Serializable {
         this.xVelocity = xVelocity;
     }
 
-    @XmlAttribute
     public double getyVelocity() {
         return yVelocity;
     }
@@ -117,13 +106,14 @@ public class Target implements Serializable {
                     oos.writeObject(targetToString());
                     oos.flush();
                     String msg = (String) ois.readObject();
-                    System.out.println(msg);
+                    System.out.println(msg + "for Address:" + address + " Port:" + portNumber);
+                    Thread.sleep(400);
                 } else {
                     socket = new Socket(address, portNumber);
                     oos = new ObjectOutputStream(socket.getOutputStream());
                     ois = new ObjectInputStream(socket.getInputStream());
                     isConnected = true;
-                    Thread.sleep(1000);
+                    Thread.sleep(400);
                 }
             } catch (IOException e) {
                 isConnected = false;
@@ -172,13 +162,14 @@ public class Target implements Serializable {
         return Double.parseDouble(decimalFormat.format(number));
     }
 
-    public static Target readObjectFromXML() {
+    public static Target readObjectFromXML(String xmlPath) {
         Target target = null;
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+
         try {
             dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             DocumentBuilder db = dbf.newDocumentBuilder();
-            Document doc = db.parse(new File("C:\\Users\\stj.eergen\\Desktop\\Target\\src\\main\\resources\\target1.xml"));
+            Document doc = db.parse(new File(xmlPath));
             doc.getDocumentElement().normalize();
             NodeList list = doc.getElementsByTagName("Target");
 
@@ -191,6 +182,8 @@ public class Target implements Serializable {
                             Double.parseDouble(element.getElementsByTagName("y").item(0).getTextContent()),
                             Double.parseDouble(element.getElementsByTagName("xVelocity").item(0).getTextContent()),
                             Double.parseDouble(element.getElementsByTagName("yVelocity").item(0).getTextContent()));
+                    setPortList(element.getElementsByTagName("ports").item(0).getTextContent());
+                    address = element.getElementsByTagName("address").item(0).getTextContent();
                 }
             }
         } catch (ParserConfigurationException | IOException | SAXException e) {
@@ -198,17 +191,25 @@ public class Target implements Serializable {
         }
         return target;
     }
+    public static ArrayList<Integer> setPortList(String ports) {
+        String[] splitPorts = ports.split(",");
+        portList = new ArrayList<>();
+        for (String port : splitPorts) {
+            portList.add(Integer.valueOf(port));
+        }
+        return portList;
+    }
 
     public static void main(String[] args) {
-        Target target = readObjectFromXML();
+        
+        Target target = readObjectFromXML("C:\\Users\\stj.eergen\\Desktop\\Target\\src\\main\\resources\\target1.xml");
         Thread t1 = new Thread(target::updateCoordinates);
-        Thread t2 = new Thread(() -> {
-            target.sendTarget("localhost", 8080);
-        });
-        //t1.start();
-        t2.start();
-
-
+        t1.start();
+        for (Integer port : portList) {
+            new Thread(() -> {
+                target.sendTarget(address, port);
+            }).start();
+        }
     }
 }
 
