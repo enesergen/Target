@@ -22,9 +22,9 @@ public class Target {
     private double y;
     private double xVelocity;
     private double yVelocity;
-    private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");
-    private static ArrayList<Integer> portList;
-    private static String address;
+    private static final DecimalFormat decimalFormat = new DecimalFormat("0.00");//data format
+    private static ArrayList<Integer> portList;//ports are that data is sent
+    private static String address;//sensor address
 
     public Target(String targetName, double x, double y, double xVelocity, double yVelocity) {
         this.targetName = targetName;
@@ -60,26 +60,10 @@ public class Target {
         this.y = y;
     }
 
-    public double getxVelocity() {
-        return xVelocity;
-    }
-
-    public void setxVelocity(double xVelocity) {
-        this.xVelocity = xVelocity;
-    }
-
-    public double getyVelocity() {
-        return yVelocity;
-    }
-
-    public void setyVelocity(double yVelocity) {
-        this.yVelocity = yVelocity;
-    }
-
 
     public void sendTarget(String address, int portNumber) {
         boolean isConnected = false;
-        Socket socket = null;
+        Socket socket;
         ObjectOutputStream oos = null;
         ObjectInputStream ois = null;
 
@@ -107,33 +91,32 @@ public class Target {
                     oos.flush();
                     String msg = (String) ois.readObject();
                     System.out.println(msg + "for Address:" + address + " Port:" + portNumber);
-                    Thread.sleep(400);
+                    Thread.sleep(300);
                 } else {
                     socket = new Socket(address, portNumber);
                     oos = new ObjectOutputStream(socket.getOutputStream());
                     ois = new ObjectInputStream(socket.getInputStream());
                     isConnected = true;
-                    Thread.sleep(400);
                 }
-            } catch (IOException e) {
+            } catch (IOException | InterruptedException | ClassNotFoundException e) {
                 isConnected = false;
                 System.out.println("Connection failed. It will try to provide connection");
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(3000);// it will try to connect at 3 second intervals
                 } catch (InterruptedException ex) {
                     throw new RuntimeException(ex);
                 }
-            } catch (InterruptedException | ClassNotFoundException e) {
-                throw new RuntimeException(e);
             }
         }
 
     }
 
+    //it will be used to send data operation
     public String targetToString() {
         return targetName + "," + x + "," + y + "," + xVelocity + "," + yVelocity;
     }
 
+    //One thread is constantly updates the X and Y values
     public void updateCoordinates() {
         while (true) {
             synchronized (this) {
@@ -150,18 +133,21 @@ public class Target {
                 System.out.println("Update Func " + "X:" + x + " Y:" + y);
             }
             try {
-                Thread.sleep(1000);
+                Thread.sleep(1000); //The update interval of data is one second.
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-
         }
     }
 
+    // It will convert the incoming value to desired format.
     public double formatAndRoundNumber(double number) {
-        return Double.parseDouble(decimalFormat.format(number));
+        String formattedNumber = decimalFormat.format(number);
+        formattedNumber = formattedNumber.replace(',', '.');
+        return Double.parseDouble(formattedNumber);
     }
 
+    // it will take the initial values from XML files.
     public static Target readObjectFromXML(String xmlPath) {
         Target target = null;
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -191,19 +177,20 @@ public class Target {
         }
         return target;
     }
-    public static ArrayList<Integer> setPortList(String ports) {
+
+
+    //converts string portlist to integer value list
+    public static void setPortList(String ports) {
         String[] splitPorts = ports.split(",");
         portList = new ArrayList<>();
         for (String port : splitPorts) {
             portList.add(Integer.valueOf(port));
         }
-        return portList;
     }
 
     public static void main(String[] args) {
-
         //Target target = readObjectFromXML(args[0]);
-        Target target = readObjectFromXML("C:\\Users\\stj.eergen\\Desktop\\Target\\src\\main\\resources\\target1.xml");
+        Target target = readObjectFromXML("src/main/resources/target1.xml");
         Thread t1 = new Thread(target::updateCoordinates);
         t1.start();
         for (Integer port : portList) {
